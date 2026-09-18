@@ -1,0 +1,9 @@
+langchain
+langchain-groq
+langchain-pinecone
+langchain-ollama
+langchain-docling
+langchain-text-splitters
+docling
+pinecone
+python-dotenv

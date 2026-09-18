@@ -1,0 +1,127 @@
+[
+    {
+        "question": "What are the NTC Service Regulations 2023 called and who do they apply to?",
+        "expected_answer": "They are called the National Telecommunication Corporation Employees (Service) Regulations, 2023 and are applicable to all regular employees of NTC.",
+        "category": "general"
+    },
+    {
+        "question": "Who is responsible for implementing employee-related regulations at NTC?",
+        "expected_answer": "The HR department has the ultimate responsibility for implementation of these regulations.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What does the policy say about employee service records?",
+        "expected_answer": "Employees may see their service record in the presence of the officer maintaining it. The HR department maintains records at headquarters and regional offices.",
+        "category": "record_keeping"
+    },
+    {
+        "question": "What does 'competent authority' mean in the NTC Service Regulations?",
+        "expected_answer": "Competent authority means the authority in which a particular administrative or financial power is vested or any other authority to whom such powers are delegated under these regulations.",
+        "category": "definition"
+    },
+    {
+        "question": "What are the responsibilities of the HR department under NTC regulations?",
+        "expected_answer": "The HR department maintains service records, implements regulations, and handles employee-related matters at NTC headquarters and regional offices.",
+        "category": "multi_part"
+    },
+    {
+        "question": "What is NTC's policy on employee salary increments?",
+        "expected_answer": "The provided documents do not contain sufficient information about NTC's policy on employee salary increments.",
+        "category": "missing_information"
+    },
+    {
+        "question": "What penalties can be imposed on civil servants under the Efficiency and Discipline Rules 2020?",
+        "expected_answer": "Minor penalties: censure, withholding of increment for up to 3 years, reduction to lower pay stage for up to 3 stages, withholding of promotion for up to 3 years. Major penalties: recovery of embezzled money, reduction to lower post and pay scale for up to 3 years, compulsory retirement, removal from service, dismissal from service.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is the acceptable use policy for NTC data network?",
+        "expected_answer": "The policy guides acceptable use of NTC network facilities and services. Users must comply with the policy and NTC may determine inappropriate use.",
+        "category": "general"
+    },
+    {
+        "question": "How are misconduct proceedings initiated under civil servant rules?",
+        "expected_answer": "Proceedings are initiated by the authority. The accused is informed in writing of the grounds, charges, and proposed penalties.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is the role of the inquiry officer in disciplinary proceedings?",
+        "expected_answer": "The inquiry officer is appointed by the authority to inquire into charges. They have powers of a civil court including summoning witnesses and requiring documents.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What happens to an employee's leave during disciplinary proceedings?",
+        "expected_answer": "If a civil servant on leave is required to be proceeded against, the leave shall be cancelled by the authority and they shall be called back to join proceedings. If sent on leave under rule 5(1), the period is treated as duty.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is the blacklisting policy under NTC PPRA?",
+        "expected_answer": "The provided documents do not contain detailed information about NTC's blacklisting policy under PPRA.",
+        "category": "general"
+    },
+    {
+        "question": "Can employees appeal disciplinary decisions?",
+        "expected_answer": "Yes, civil servants have the right of appeal under the Civil Servants Appeal Rules 1977. However, there is no appeal against orders of the President.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is the email policy for government employees?",
+        "expected_answer": "The Controlling Authority decides which employees should be provided with email addresses. The policy covers appropriate use of government email systems.",
+        "category": "general"
+    },
+    {
+        "question": "What happens if an employee is absent from duty for more than one year?",
+        "expected_answer": "Where charge of absence from duty for more than one year is proved, the penalty of compulsory retirement or removal or dismissal from service shall be imposed. Absence during proceedings is treated as extraordinary leave without pay.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is NTC's employee housing policy?",
+        "expected_answer": "An employee not provided official accommodation and not opting for house rent allowance is entitled to a rental ceiling at rates approved by the NTC Management Board, subject to submitting a certificate of residing in rented or self-owned accommodation.",
+        "category": "specific_section"
+    },
+    {
+        "question": "How are inquiry committee members appointed?",
+        "expected_answer": "An inquiry committee consists of two or more officers headed by a convener, appointed by the authority. The convener should be senior in rank to the accused.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is the process for suspension of civil servants?",
+        "expected_answer": "The authority may place a civil servant under suspension for an initial period not exceeding 120 days, extendable. During suspension, the employee is entitled to pay and allowance per Fundamental Rule-53.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is NTC's employee performance evaluation process?",
+        "expected_answer": "The provided documents do not contain information about NTC's employee performance evaluation process.",
+        "category": "missing_information"
+    },
+    {
+        "question": "Under what conditions can a civil servant be proceeded against under the Efficiency and Discipline Rules 2020?",
+        "expected_answer": "A civil servant can be proceeded against if considered inefficient, guilty of misconduct, corrupt (disproportionate assets, living beyond means), or engaged in subversive activities or disclosure of official secrets.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is the de-regulation policy for the telecom sector?",
+        "expected_answer": "The policy aims to establish an effective and well-defined regulatory regime consistent with international best practices.",
+        "category": "general"
+    },
+    {
+        "question": "What are the rules about representation by counsel in proceedings?",
+        "expected_answer": "No party to any proceedings under these rules shall be represented by an advocate or counsel at any stage before the appellate authority, authority, inquiry officer or inquiry committee.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What is NTC's policy on employee training abroad?",
+        "expected_answer": "Foreign training exceeding 45 days at NTC expense requires executing a bond with two sureties to serve minimum 3 years after return. If employee leaves before bond period, training expenses are recovered from him or guarantors.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What happens to proceedings if a civil servant is in judicial custody?",
+        "expected_answer": "Proceedings shall not be discontinued merely on grounds of being sub-judice. However, inquiry may be deferred if holding it during custody is not possible or may impede justice.",
+        "category": "specific_section"
+    },
+    {
+        "question": "What are the powers of the inquiry committee?",
+        "expected_answer": "The inquiry committee has powers of a civil court under the Code of Civil Procedure 1908, including summoning witnesses, requiring documents, and issuing commissions for examination.",
+        "category": "specific_section"
+    }
+]
