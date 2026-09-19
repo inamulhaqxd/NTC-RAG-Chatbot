@@ -1,10 +1,12 @@
-"""RAG query — search Pinecone, rerank, send context to LLM, return answer."""
+"""RAG query — hybrid search (vector + BM25), rerank, send context to LLM."""
 
 import logging
+import re
 from langchain_groq import ChatGroq
 from langchain_ollama import OllamaEmbeddings
 from langchain_pinecone import PineconeRerank
 from pinecone import Pinecone
+from rank_bm25 import BM25Okapi
 
 from config import (
     GROQ_API_KEY,
@@ -19,27 +21,51 @@ log = logging.getLogger(__name__)
 
 llm = ChatGroq(api_key=GROQ_API_KEY, model=LLM_MODEL)
 embeddings = OllamaEmbeddings(model="nomic-embed-text:latest")
-index = Pinecone(api_key=PINECONE_API_KEY).Index(INDEX_NAME)
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index(INDEX_NAME)
 reranker = PineconeRerank(model="bge-reranker-v2-m3", top_n=30)
 
+bm25_corpus = []
+bm25_ids = []
+bm25_model = None
 
-def get_parent_context(child_match, all_matches):
-    """Get parent section context for a child chunk."""
-    parent_id = child_match['metadata'].get('parent_id', '')
-    if not parent_id:
-        return ""
+
+def load_bm25_index():
+    """Load all chunks from Pinecone into BM25 index."""
+    global bm25_corpus, bm25_ids, bm25_model
     
-    for m in all_matches:
-        if m['id'] == parent_id:
-            return m['metadata'].get('text', '')
-    return ""
+    if bm25_model is not None:
+        return
+    
+    log.info("Loading BM25 index from Pinecone...")
+    all_vectors = index.query(vector=[0] * 768, top_k=10000, include_metadata=True)
+    
+    bm25_corpus = []
+    bm25_ids = []
+    
+    for match in all_vectors["matches"]:
+        text = match["metadata"].get("text", "")
+        tokens = tokenize(text)
+        if tokens:
+            bm25_corpus.append(tokens)
+            bm25_ids.append(match["id"])
+    
+    bm25_model = BM25Okapi(bm25_corpus)
+    log.info("BM25 index loaded with %d chunks", len(bm25_ids))
+
+
+def tokenize(text):
+    """Simple tokenization for BM25."""
+    text = text.lower()
+    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    return text.split()
 
 
 def build_context(matches):
-    """Build context from matches with parent-child awareness."""
+    """Build context from matches with deduplication."""
     context = ""
     sources = []
-    char_limit = 4000
+    char_limit = 6000
     seen_sections = set()
     
     for match in matches:
@@ -48,11 +74,9 @@ def build_context(matches):
         source = meta.get('source', 'unknown')
         section = meta.get('section', '')
         page = meta.get('page', 0)
-        level = meta.get('level', 'chunk')
-        chunk_type = meta.get('chunk_type', 'child')
         
         section_key = f"{source}-{section}"
-        if section_key in seen_sections and level == 'chunk':
+        if section_key in seen_sections:
             continue
         seen_sections.add(section_key)
         
@@ -65,6 +89,46 @@ def build_context(matches):
         sources.append(f"{source} — {section} (p.{page})")
     
     return context, sources
+
+
+def hybrid_search(query, top_k=15):
+    """Search using both vector and BM25, combine results."""
+    query_vector = embeddings.embed_query(query)
+    
+    vector_results = index.query(
+        vector=query_vector,
+        top_k=top_k,
+        include_metadata=True,
+    )
+    
+    vector_matches = {
+        m['id']: m for m in vector_results["matches"]
+        if m["score"] >= SCORE_THRESHOLD
+    }
+    
+    load_bm25_index()
+    query_tokens = tokenize(query)
+    bm25_scores = bm25_model.get_scores(query_tokens)
+    
+    bm25_top_indices = sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)[:top_k]
+    
+    bm25_matches = {}
+    for idx in bm25_top_indices:
+        if bm25_scores[idx] > 0:
+            chunk_id = bm25_ids[idx]
+            vector_match = vector_results["matches"]
+            full_match = next((m for m in vector_match if m['id'] == chunk_id), None)
+            if full_match:
+                bm25_matches[chunk_id] = full_match
+    
+    combined = {}
+    combined.update(vector_matches)
+    combined.update(bm25_matches)
+    
+    results = list(combined.values())
+    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    
+    return results[:top_k]
 
 
 def rerank_matches(query, matches):
@@ -97,25 +161,35 @@ def rerank_matches(query, matches):
 
 def answer_question(question):
     """Search Pinecone, rerank, and get answer from LLM."""
-    query_vector = embeddings.embed_query(question)
+    import re
     
-    results = index.query(
-        vector=query_vector,
-        top_k=TOP_K,
-        include_metadata=True,
-    )
+    questions = re.split(r'(?<=[.?])\s+', question)
+    questions = [q.strip() for q in questions if q.strip()]
     
-    filtered_matches = [
-        m for m in results["matches"]
-        if m["score"] >= SCORE_THRESHOLD
-    ]
+    if len(questions) > 1:
+        answers = []
+        for q in questions:
+            answer = _answer_single(q)
+            answers.append(f"**{q}**\n{answer}")
+        return "\n\n".join(answers)
     
-    if not filtered_matches:
-        filtered_matches = results["matches"][:3]
+    return _answer_single(question)
+
+
+def _answer_single(question):
+    """Answer a single question."""
+    matches = hybrid_search(question, top_k=TOP_K)
     
-    filtered_matches = rerank_matches(question, filtered_matches)
+    if not matches:
+        matches = index.query(
+            vector=embeddings.embed_query(question),
+            top_k=3,
+            include_metadata=True,
+        )["matches"]
     
-    context, sources = build_context(filtered_matches)
+    matches = rerank_matches(question, matches)
+    
+    context, sources = build_context(matches)
     
     prompt = f"""You are NTC Helper — a friendly assistant for National Telecommunication Corporation employees.
 
@@ -125,8 +199,7 @@ PERSONALITY:
 - Use simple language, avoid jargon
 
 MULTI-QUESTION RULES:
-- If the user asks 2+ separate questions, answer EACH question separately
-- Use clear headings for each answer (e.g., **Question 1:**, **Question 2:**)
+- If the user asks 2+ different questions, answer EACH question
 - If one answer is available but another is not, still answer the one you can
 - Never skip a question or combine answers
 
