@@ -1,31 +1,81 @@
 """Retrieval — vector search, reranking, context building."""
 
 import logging
+import re
 from langchain_pinecone import PineconeRerank
 
 from config import SCORE_THRESHOLD, TOP_K
 from core.embedding import embed_query
-from core.vector_store import query_vectors
+from core.vector_store import query_vectors, index
+from core.llm import generate
 
 log = logging.getLogger(__name__)
 
 reranker = PineconeRerank(model="bge-reranker-v2-m3", top_n=15)
 
 
+EXPAND_PROMPT = """Generate 3 search queries for this question. Return ONLY the queries, one per line, no numbering.
+
+Question: {question}
+
+Queries:"""
+
+
+def expand_query(question):
+    """Generate multiple queries from one question."""
+    prompt = EXPAND_PROMPT.format(question=question)
+    response = generate(prompt)
+    queries = [q.strip() for q in response.strip().split('\n') if q.strip()]
+    return [question] + queries[:3]
+
+
+def keyword_search(query, top_k=15):
+    """Search by keyword in metadata."""
+    keywords = re.findall(r'\w+', query.lower())
+    
+    results = index.query(vector=[0] * 768, top_k=1000, include_metadata=True)
+    
+    scored = []
+    for m in results["matches"]:
+        text = m["metadata"].get("text", "").lower()
+        score = sum(1 for kw in keywords if kw in text)
+        if score > 0:
+            m["keyword_score"] = score
+            scored.append(m)
+    
+    scored.sort(key=lambda x: x.get("keyword_score", 0), reverse=True)
+    return scored[:top_k]
+
+
 def search(query, top_k=15):
     """Search Pinecone for similar vectors."""
-    query_vector = embed_query(query)
-    results = query_vectors(query_vector, top_k=top_k)
+    queries = expand_query(query)
     
-    matches = [
-        m for m in results["matches"]
-        if m["score"] >= SCORE_THRESHOLD
-    ]
+    all_matches = {}
+    for q in queries:
+        query_vector = embed_query(q)
+        results = query_vectors(query_vector, top_k=top_k)
+        
+        for m in results["matches"]:
+            if m["score"] >= SCORE_THRESHOLD:
+                if m['id'] not in all_matches or m['score'] > all_matches[m['id']]['score']:
+                    all_matches[m['id']] = m
+    
+    keyword_results = keyword_search(query, top_k=top_k)
+    for m in keyword_results:
+        if m['id'] not in all_matches:
+            m['score'] = 0.5
+            all_matches[m['id']] = m
+    
+    matches = list(all_matches.values())
+    matches.sort(key=lambda x: x.get("score", 0), reverse=True)
     
     if not matches:
-        matches = results["matches"][:3]
+        query_vector = embed_query(query)
+        results = query_vectors(query_vector, top_k=3)
+        matches = results["matches"]
     
-    return matches
+    return matches[:top_k]
 
 
 def rerank(query, matches):
