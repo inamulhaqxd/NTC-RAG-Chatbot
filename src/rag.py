@@ -1,7 +1,9 @@
-"""RAG query — search Pinecone, send context to LLM, return answer."""
+"""RAG query — search Pinecone, rerank, send context to LLM, return answer."""
 
+import logging
 from langchain_groq import ChatGroq
 from langchain_ollama import OllamaEmbeddings
+from langchain_pinecone import PineconeRerank
 from pinecone import Pinecone
 
 from config import (
@@ -13,9 +15,12 @@ from config import (
     TOP_K,
 )
 
+log = logging.getLogger(__name__)
+
 llm = ChatGroq(api_key=GROQ_API_KEY, model=LLM_MODEL)
 embeddings = OllamaEmbeddings(model="nomic-embed-text:latest")
 index = Pinecone(api_key=PINECONE_API_KEY).Index(INDEX_NAME)
+reranker = PineconeRerank(model="bge-reranker-v2-m3", top_n=5)
 
 
 def get_parent_context(child_match, all_matches):
@@ -51,10 +56,7 @@ def build_context(matches):
             continue
         seen_sections.add(section_key)
         
-        if chunk_type == 'parent':
-            entry = f"[Source: {source} | Section: {section} | Page: {page}]\n{text}\n\n"
-        else:
-            entry = f"[Source: {source} | Section: {section} | Page: {page}]\n{text}\n\n"
+        entry = f"[Source: {source} | Section: {section} | Page: {page}]\n{text}\n\n"
         
         if len(context) + len(entry) > char_limit:
             break
@@ -65,8 +67,36 @@ def build_context(matches):
     return context, sources
 
 
+def rerank_matches(query, matches):
+    """Rerank matches using Pinecone reranker."""
+    if not matches:
+        return matches
+    
+    documents = [
+        {"id": m['id'], "text": m['metadata'].get('text', '')}
+        for m in matches
+    ]
+    
+    try:
+        result = reranker.rerank(query=query, documents=documents)
+        
+        reranked = []
+        for ranked in result:
+            for m in matches:
+                if m['id'] == ranked['id']:
+                    m['rerank_score'] = ranked.get('score', 0)
+                    reranked.append(m)
+                    break
+        
+        reranked.sort(key=lambda x: x.get('rerank_score', 0), reverse=True)
+        return reranked
+    except Exception as e:
+        log.warning("Reranking failed, using original order: %s", e)
+        return matches
+
+
 def answer_question(question):
-    """Search Pinecone and get answer from LLM."""
+    """Search Pinecone, rerank, and get answer from LLM."""
     query_vector = embeddings.embed_query(question)
     
     results = index.query(
@@ -82,6 +112,8 @@ def answer_question(question):
     
     if not filtered_matches:
         filtered_matches = results["matches"][:3]
+    
+    filtered_matches = rerank_matches(question, filtered_matches)
     
     context, sources = build_context(filtered_matches)
     
