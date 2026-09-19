@@ -1,91 +1,34 @@
-"""Retrieval — hybrid search (vector + BM25), reranking, context building."""
+"""Retrieval — vector search, reranking, context building."""
 
 import logging
-import re
 from langchain_pinecone import PineconeRerank
-from rank_bm25 import BM25Okapi
 
 from config import SCORE_THRESHOLD, TOP_K
-from core.embedding import embed_query, embeddings
-from core.vector_store import query_vectors, index
+from core.embedding import embed_query
+from core.vector_store import query_vectors
 
 log = logging.getLogger(__name__)
 
-reranker = PineconeRerank(model="bge-reranker-v2-m3", top_n=30)
-
-bm25_corpus = []
-bm25_ids = []
-bm25_model = None
+reranker = PineconeRerank(model="bge-reranker-v2-m3", top_n=15)
 
 
-def load_bm25_index():
-    """Load all chunks from Pinecone into BM25 index."""
-    global bm25_corpus, bm25_ids, bm25_model
-    
-    if bm25_model is not None:
-        return
-    
-    log.info("Loading BM25 index from Pinecone...")
-    all_vectors = index.query(vector=[0] * 768, top_k=10000, include_metadata=True)
-    
-    bm25_corpus = []
-    bm25_ids = []
-    
-    for match in all_vectors["matches"]:
-        text = match["metadata"].get("text", "")
-        tokens = tokenize(text)
-        if tokens:
-            bm25_corpus.append(tokens)
-            bm25_ids.append(match["id"])
-    
-    bm25_model = BM25Okapi(bm25_corpus)
-    log.info("BM25 index loaded with %d chunks", len(bm25_ids))
-
-
-def tokenize(text):
-    """Simple tokenization for BM25."""
-    text = text.lower()
-    text = re.sub(r'[^a-z0-9\s]', ' ', text)
-    return text.split()
-
-
-def hybrid_search(query, top_k=15):
-    """Search using both vector and BM25, combine results."""
+def search(query, top_k=15):
+    """Search Pinecone for similar vectors."""
     query_vector = embed_query(query)
+    results = query_vectors(query_vector, top_k=top_k)
     
-    vector_results = query_vectors(query_vector, top_k=top_k)
-    
-    vector_matches = {
-        m['id']: m for m in vector_results["matches"]
+    matches = [
+        m for m in results["matches"]
         if m["score"] >= SCORE_THRESHOLD
-    }
+    ]
     
-    load_bm25_index()
-    query_tokens = tokenize(query)
-    bm25_scores = bm25_model.get_scores(query_tokens)
+    if not matches:
+        matches = results["matches"][:3]
     
-    bm25_top_indices = sorted(range(len(bm25_scores)), key=lambda i: bm25_scores[i], reverse=True)[:top_k]
-    
-    bm25_matches = {}
-    for idx in bm25_top_indices:
-        if bm25_scores[idx] > 0:
-            chunk_id = bm25_ids[idx]
-            vector_match = vector_results["matches"]
-            full_match = next((m for m in vector_match if m['id'] == chunk_id), None)
-            if full_match:
-                bm25_matches[chunk_id] = full_match
-    
-    combined = {}
-    combined.update(vector_matches)
-    combined.update(bm25_matches)
-    
-    results = list(combined.values())
-    results.sort(key=lambda x: x.get("score", 0), reverse=True)
-    
-    return results[:top_k]
+    return matches
 
 
-def rerank_matches(query, matches):
+def rerank(query, matches):
     """Rerank matches using Pinecone reranker."""
     if not matches:
         return matches

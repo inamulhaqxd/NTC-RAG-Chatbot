@@ -4,7 +4,7 @@ from core.ingestion import extract_text_hybrid
 from core.chunking import build_chunks
 from core.embedding import embed_query, embed_documents
 from core.vector_store import upsert_vectors, query_vectors, delete_by_source, delete_all
-from core.retrieval import hybrid_search, rerank_matches, build_context
+from core.retrieval import search, rerank, build_context
 from core.llm import generate, build_prompt
 
 __all__ = [
@@ -16,8 +16,8 @@ __all__ = [
     "query_vectors",
     "delete_by_source",
     "delete_all",
-    "hybrid_search",
-    "rerank_matches",
+    "search",
+    "rerank",
     "build_context",
     "generate",
     "build_prompt",

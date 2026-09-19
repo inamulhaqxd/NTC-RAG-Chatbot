@@ -44,9 +44,6 @@ def process_pdf(pdf_path, source_name=None):
         "chunk_id": c['id'],
         "section": c.get('heading', ''),
         "page": c.get('page', 0),
-        "level": c.get('level', 'chunk'),
-        "parent_id": c.get('parent_id', '') or '',
-        "child_count": len(c.get('children', [])),
     } for c in chunks]
     
     batch_size = 50

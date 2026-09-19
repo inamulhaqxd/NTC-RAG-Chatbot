@@ -17,7 +17,7 @@ from core.ingestion import extract_text_hybrid
 from core.chunking import build_chunks
 from core.embedding import embed_documents
 from core.vector_store import upsert_vectors, delete_by_source
-from core.retrieval import hybrid_search, rerank_matches, build_context
+from core.retrieval import search, rerank, build_context
 from core.llm import generate, build_prompt
 
 app = FastAPI(title="NTC Policy Assistant")
@@ -61,21 +61,10 @@ def answer_question(question):
 
 def _answer_single(question):
     """Answer a single question."""
-    matches = hybrid_search(question, top_k=TOP_K)
-    
-    if not matches:
-        from core.embedding import embeddings
-        from core.vector_store import index
-        matches = index.query(
-            vector=embeddings.embed_query(question),
-            top_k=3,
-            include_metadata=True,
-        )["matches"]
-    
-    matches = rerank_matches(question, matches)
+    matches = search(question, top_k=TOP_K)
+    matches = rerank(question, matches)
     
     context, sources = build_context(matches)
-    
     prompt = build_prompt(context, question)
     return generate(prompt)
 
@@ -124,9 +113,6 @@ def upload_pdf(file: UploadFile = File(...)):
             "chunk_id": c['id'],
             "section": c.get('heading', ''),
             "page": c.get('page', 0),
-            "level": c.get('level', 'chunk'),
-            "parent_id": c.get('parent_id', '') or '',
-            "child_count": len(c.get('children', [])),
         } for c in chunks]
         
         vectors_raw = embed_documents(chunk_texts)
