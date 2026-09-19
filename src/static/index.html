@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NTC Policy Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>NTC Policy</h2>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="new-chat-btn" onclick="newChat()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"></path>
+          </svg>
+          New Chat
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="upload-section">
+          <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Upload PDF
+          </button>
+          <input type="file" id="fileInput" accept=".pdf" hidden onchange="uploadFile(this)">
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="chat-container" id="chatContainer">
+        <div class="welcome-message" id="welcomeMessage">
+          <div class="welcome-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+          <h1>NTC Policy Assistant</h1>
+          <p>Ask questions about NTC policies, rules, and regulations</p>
+        </div>
+        <div class="messages" id="messages"></div>
+      </div>
+
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea 
+            id="questionInput" 
+            placeholder="Ask about NTC policies..." 
+            rows="1"
+            onkeydown="handleKeyDown(event)"
+            oninput="autoResize(this)"
+          ></textarea>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+        <p class="disclaimer">Answers are based on NTC policy documents only.</p>
+      </div>
+    </main>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

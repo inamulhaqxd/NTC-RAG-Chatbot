@@ -21,7 +21,7 @@ from config import EMBEDDING_MODEL, INDEX_NAME, PINECONE_API_KEY
 from delete_old_vector import delete_by_name
 
 log = logging.getLogger(__name__)
-DOCUMENTS_DIR = Path("data/documents")
+DOCUMENTS_DIR = Path(__file__).parent.parent / "data" / "documents"
 
 embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
 index = Pinecone(api_key=PINECONE_API_KEY).Index(INDEX_NAME)
@@ -35,6 +35,7 @@ def clean_text(text):
 
 
 def is_scanned(pdf_path):
+    """Check if PDF is scanned (image-based)."""
     doc = pymupdf.open(str(pdf_path))
     total = sum(len(p.get_text()) for p in doc)
     doc.close()
@@ -42,10 +43,12 @@ def is_scanned(pdf_path):
 
 
 def extract_text(pdf_path):
+    """Extract text using PyMuPDF4LLM (fast, good for text PDFs)."""
     return pymupdf4llm.to_markdown(str(pdf_path))
 
 
 def extract_text_ocr(pdf_path):
+    """Extract text using Docling OCR (for scanned PDFs)."""
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import OcrAutoOptions, OcrMode, PdfPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -60,37 +63,77 @@ def extract_text_ocr(pdf_path):
     return converter.convert(str(pdf_path)).document.export_to_markdown()
 
 
+def extract_text_hybrid(pdf_path):
+    """Hybrid extraction: PyMuPDF4LLM first, fallback to Docling for scanned."""
+    try:
+        text = extract_text(pdf_path)
+        word_count = len(text.split())
+        
+        if word_count < 50:
+            log.info("Low text count (%d words), trying OCR: %s", word_count, pdf_path.name)
+            try:
+                ocr_text = extract_text_ocr(pdf_path)
+                if len(ocr_text.split()) > word_count:
+                    return clean_text(ocr_text)
+            except Exception as e:
+                log.warning("OCR failed: %s", e)
+        
+        return clean_text(text)
+    except Exception as e:
+        log.warning("PyMuPDF failed (%s), trying OCR: %s", e, pdf_path.name)
+        return clean_text(extract_text_ocr(pdf_path))
+
+
 def process_pdf(pdf_path):
+    """Process a single PDF: extract, chunk, embed, and upsert to Pinecone."""
     delete_by_name(pdf_path.stem, index)
-
-    if is_scanned(pdf_path):
-        log.info("Scanned — using OCR: %s", pdf_path.name)
-        text = clean_text(extract_text_ocr(pdf_path))
-    else:
-        log.info("Text — using pymupdf4llm: %s", pdf_path.name)
-        text = clean_text(extract_text(pdf_path))
-
+    
+    log.info("Extracting: %s", pdf_path.name)
+    text = extract_text_hybrid(pdf_path)
+    
+    if not text.strip():
+        log.warning("No text extracted from %s", pdf_path.name)
+        return 0
+    
     chunks = build_chunks(text)
     if not chunks:
         log.warning("No chunks for %s — skipping", pdf_path.name)
         return 0
-
-    chunk_texts = [t for _, t in chunks]
-    vectors_raw = embeddings.embed_documents(chunk_texts)
-
+    
     vectors = []
-    for i, ((heading, chunk), vec) in enumerate(zip(chunks, vectors_raw)):
-        vectors.append({
-            "id": f"{pdf_path.stem}-chunk-{i}",
-            "values": vec,
-            "metadata": {
-                "text": chunk,
-                "source": pdf_path.name,
-                "chunk_id": i,
-                "section": heading,
-            },
+    chunk_texts = []
+    chunk_ids = []
+    chunk_metadatas = []
+    
+    for chunk in chunks:
+        chunk_texts.append(chunk['text'])
+        chunk_ids.append(f"{pdf_path.stem}-{chunk['id']}")
+        chunk_metadatas.append({
+            "text": chunk['text'],
+            "source": pdf_path.name,
+            "chunk_id": chunk['id'],
+            "section": chunk.get('heading', ''),
+            "page": chunk.get('page', 0),
+            "level": chunk.get('level', 'chunk'),
+            "parent_id": chunk.get('parent_id', '') or '',
+            "child_count": len(chunk.get('children', [])),
         })
-
+    
+    batch_size = 50
+    for i in range(0, len(chunk_texts), batch_size):
+        batch_texts = chunk_texts[i:i + batch_size]
+        batch_ids = chunk_ids[i:i + batch_size]
+        batch_metadatas = chunk_metadatas[i:i + batch_size]
+        
+        vectors_raw = embeddings.embed_documents(batch_texts)
+        
+        for vec, cid, meta in zip(vectors_raw, batch_ids, batch_metadatas):
+            vectors.append({
+                "id": cid,
+                "values": vec,
+                "metadata": meta,
+            })
+    
     index.upsert(vectors=vectors)
     log.info("Upserted %d chunks for %s", len(vectors), pdf_path.name)
     return len(vectors)

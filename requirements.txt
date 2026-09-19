@@ -7,3 +7,6 @@ langchain-text-splitters
 docling
 pinecone
 python-dotenv
+fastapi
+uvicorn
+python-multipart
