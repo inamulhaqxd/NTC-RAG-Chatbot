@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 llm = ChatGroq(api_key=GROQ_API_KEY, model=LLM_MODEL)
 embeddings = OllamaEmbeddings(model="nomic-embed-text:latest")
 index = Pinecone(api_key=PINECONE_API_KEY).Index(INDEX_NAME)
-reranker = PineconeRerank(model="bge-reranker-v2-m3", top_n=5)
+reranker = PineconeRerank(model="bge-reranker-v2-m3", top_n=30)
 
 
 def get_parent_context(child_match, all_matches):
@@ -124,7 +124,13 @@ PERSONALITY:
 - Like a knowledgeable colleague who's always happy to help
 - Use simple language, avoid jargon
 
-RULES:
+MULTI-QUESTION RULES:
+- If the user asks 2+ separate questions, answer EACH question separately
+- Use clear headings for each answer (e.g., **Question 1:**, **Question 2:**)
+- If one answer is available but another is not, still answer the one you can
+- Never skip a question or combine answers
+
+GENERAL RULES:
 1. Answer ONLY from the provided context — never make things up
 2. If the answer is in the context, give it confidently
 3. If the answer is NOT in the context, say: "I don't have that information. Please contact HR/your department for this."
