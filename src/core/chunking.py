@@ -1,4 +1,4 @@
-"""Advanced chunking: heading-aware, recursive, parent-child with metadata."""
+"""Chunking — heading-aware, recursive, parent-child with metadata."""
 
 import re
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -94,20 +94,7 @@ def split_by_recursive(text, chunk_size=1500, chunk_overlap=150):
 
 
 def build_chunks(text, chunk_size=1500, chunk_overlap=150, min_chars=50):
-    """Build chunks with heading-aware primary + recursive secondary splitting.
-    
-    Returns list of dicts with parent-child relationships:
-    {
-        'id': unique_id,
-        'text': chunk text,
-        'heading': section heading,
-        'page': page number,
-        'parent_id': parent section id (or None),
-        'children': list of child chunk ids,
-        'level': 'section' or 'chunk',
-        'metadata': {source, section, page, chunk_type}
-    }
-    """
+    """Build chunks with heading-aware primary + recursive secondary splitting."""
     sections = split_by_headings(text)
     
     all_chunks = []
