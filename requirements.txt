@@ -9,3 +9,5 @@ python-dotenv
 fastapi
 uvicorn
 python-multipart
+pymupdf4llm
+rank-bm25

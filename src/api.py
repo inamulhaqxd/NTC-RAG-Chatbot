@@ -15,7 +15,7 @@ from extract import extract_text_hybrid
 from chunking import build_chunks, build_metadata
 from embedding import embed_documents
 from vector_store import upsert_vectors, delete_by_source
-from retrieval import hybrid_search, build_context
+from retrieval import hybrid_search, build_context, reset_bm25_cache
 from llm import generate, build_prompt
 
 log = logging.getLogger(__name__)
@@ -101,6 +101,7 @@ def upload_pdf(file: UploadFile = File(...)):
             for c, vec in zip(chunks, embed_documents([c['text'] for c in chunks]))
         ]
         upsert_vectors(vectors)
+        reset_bm25_cache()
 
         temp_path.rename(DOCUMENTS_DIR / filename)
         return UploadResponse(message=f"Uploaded and indexed {filename}", chunks=len(vectors))

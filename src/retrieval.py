@@ -13,29 +13,50 @@ log = logging.getLogger(__name__)
 bm25_corpus = []
 bm25_ids = []
 bm25_model = None
+bm25_dirty = True
+
+
+def reset_bm25_cache():
+    """Invalidate BM25 cache so it rebuilds on next search."""
+    global bm25_model, bm25_dirty
+    bm25_model = None
+    bm25_dirty = True
+    log.info("BM25 cache invalidated")
 
 
 def load_bm25_index():
-    """Load all chunks from Pinecone into BM25 index."""
-    global bm25_corpus, bm25_ids, bm25_model
-    
+    """Load all chunks from Pinecone into BM25 index (paginated)."""
+    global bm25_corpus, bm25_ids, bm25_model, bm25_dirty
+
     if bm25_model is not None:
         return
-    
+
     log.info("Loading BM25 index from Pinecone...")
-    all_vectors = index.query(vector=[0] * 768, top_k=10000, include_metadata=True)
-    
     bm25_corpus = []
     bm25_ids = []
-    
-    for match in all_vectors["matches"]:
-        text = match["metadata"].get("text", "")
-        tokens = tokenize(text)
-        if tokens:
-            bm25_corpus.append(tokens)
-            bm25_ids.append(match["id"])
-    
+
+    batch_size = 1000
+    next_token = None
+
+    while True:
+        kwargs = {"vector": [0] * 768, "top_k": batch_size, "include_metadata": True}
+        if next_token:
+            kwargs["page_token"] = next_token
+        page = index.query(**kwargs)
+
+        for match in page.get("matches", []):
+            text = match["metadata"].get("text", "")
+            tokens = tokenize(text)
+            if tokens:
+                bm25_corpus.append(tokens)
+                bm25_ids.append(match["id"])
+
+        next_token = page.get("next_page_token")
+        if not next_token or not page.get("matches"):
+            break
+
     bm25_model = BM25Okapi(bm25_corpus)
+    bm25_dirty = False
     log.info("BM25 index loaded with %d chunks", len(bm25_ids))
 
 
