@@ -1,8 +1,6 @@
 """FastAPI backend for NTC Policy Assistant."""
 
 import logging
-import os
-import re
 import tempfile
 from pathlib import Path
 
@@ -13,12 +11,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from config import ALLOWED_ORIGINS, DOCUMENTS_DIR, MAX_UPLOAD_BYTES, TOP_K
-from core.ingestion import extract_text_hybrid
-from core.chunking import build_chunks
-from core.embedding import embed_documents
-from core.vector_store import upsert_vectors, delete_by_source
-from core.retrieval import hybrid_search, rerank_matches, build_context
-from core.llm import generate, build_prompt
+from extract import extract_text_hybrid
+from chunking import build_chunks, build_metadata
+from embedding import embed_documents
+from vector_store import upsert_vectors, delete_by_source
+from retrieval import hybrid_search, build_context
+from llm import generate, build_prompt
+
+log = logging.getLogger(__name__)
 
 app = FastAPI(title="NTC Policy Assistant")
 app.add_middleware(
@@ -44,47 +44,29 @@ class UploadResponse(BaseModel):
     chunks: int
 
 
-def answer_question(question):
-    """Answer a question using RAG pipeline."""
-    questions = re.split(r'(?<=[.?])\s+', question)
-    questions = [q.strip() for q in questions if q.strip()]
-    
-    if len(questions) > 1:
-        answers = []
-        for q in questions:
-            answer = _answer_single(q)
-            answers.append(f"**{q}**\n{answer}")
-        return "\n\n".join(answers)
-    
-    return _answer_single(question)
+GREETINGS = {"hi", "hello", "hey", "who are you", "who are u", "what are you", "how are you", "assalam", "salam", "good morning", "good evening"}
 
 
-def _answer_single(question):
-    """Answer a single question."""
-    matches = hybrid_search(question, top_k=TOP_K)
-    
-    if not matches:
-        from core.embedding import embeddings
-        from core.vector_store import index
-        matches = index.query(
-            vector=embeddings.embed_query(question),
-            top_k=3,
-            include_metadata=True,
-        )["matches"]
-    
-    matches = rerank_matches(question, matches)
-    
-    context, sources = build_context(matches)
-    
-    prompt = build_prompt(context, question)
-    return generate(prompt)
+def is_greeting(question):
+    """Check if question is a greeting or general intro."""
+    return question.lower().strip().rstrip("?!.") in GREETINGS
 
 
 @app.post("/ask", response_model=AnswerResponse)
 def ask(req: QuestionRequest):
     if not req.question.strip():
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Question cannot be empty")
-    return AnswerResponse(answer=answer_question(req.question))
+
+    if is_greeting(req.question):
+        return AnswerResponse(answer=generate(f"You are NTC Helper — a friendly assistant for NTC employees. Respond warmly and briefly to this greeting.\n\nUser: {req.question}\n\nAnswer:"))
+
+    matches = hybrid_search(req.question, top_k=TOP_K)
+    if not matches:
+        return AnswerResponse(answer="No relevant information found in the documents.")
+
+    context = build_context(matches)
+    prompt = build_prompt(context, req.question)
+    return AnswerResponse(answer=generate(prompt))
 
 
 @app.post("/upload", response_model=UploadResponse)
@@ -95,52 +77,32 @@ def upload_pdf(file: UploadFile = File(...)):
 
     temp_path = None
     try:
-        with tempfile.NamedTemporaryFile(dir=DOCUMENTS_DIR, suffix=".pdf", delete=False) as temp_file:
-            temp_path = Path(temp_file.name)
-            total_bytes = 0
+        with tempfile.NamedTemporaryFile(dir=DOCUMENTS_DIR, suffix=".pdf", delete=False) as tmp:
+            temp_path = Path(tmp.name)
+            total = 0
             while data := file.file.read(1024 * 1024):
-                total_bytes += len(data)
-                if total_bytes > MAX_UPLOAD_BYTES:
+                total += len(data)
+                if total > MAX_UPLOAD_BYTES:
                     raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="PDF is too large")
-                temp_file.write(data)
+                tmp.write(data)
 
         delete_by_source(filename)
-        
-        log.info("Extracting: %s", filename)
         text = extract_text_hybrid(temp_path)
-        
+
         if not text.strip():
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No text extracted from PDF")
-        
+
         chunks = build_chunks(text)
         if not chunks:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No chunks generated from PDF")
-        
-        chunk_texts = [c['text'] for c in chunks]
-        chunk_ids = [f"{temp_path.stem}-{c['id']}" for c in chunks]
-        chunk_metadatas = [{
-            "text": c['text'],
-            "source": filename,
-            "chunk_id": c['id'],
-            "section": c.get('heading', ''),
-            "page": c.get('page', 0),
-            "level": c.get('level', 'chunk'),
-            "parent_id": c.get('parent_id', '') or '',
-            "child_count": len(c.get('children', [])),
-        } for c in chunks]
-        
-        vectors_raw = embed_documents(chunk_texts)
-        vectors = [{
-            "id": cid,
-            "values": vec,
-            "metadata": meta,
-        } for vec, cid, meta in zip(vectors_raw, chunk_ids, chunk_metadatas)]
-        
+
+        vectors = [
+            {"id": f"{temp_path.stem}-{c['id']}", "values": vec, "metadata": build_metadata(c, filename)}
+            for c, vec in zip(chunks, embed_documents([c['text'] for c in chunks]))
+        ]
         upsert_vectors(vectors)
-        
-        os.replace(temp_path, DOCUMENTS_DIR / filename)
-        temp_path = None
-        
+
+        temp_path.rename(DOCUMENTS_DIR / filename)
         return UploadResponse(message=f"Uploaded and indexed {filename}", chunks=len(vectors))
     except HTTPException:
         raise
@@ -156,8 +118,6 @@ def upload_pdf(file: UploadFile = File(...)):
 def home():
     return FileResponse(Path(__file__).parent / "static" / "index.html")
 
-
-log = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     import uvicorn

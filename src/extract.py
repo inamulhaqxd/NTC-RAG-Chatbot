@@ -1,8 +1,7 @@
-"""PDF ingestion — extract text from PDFs."""
+"""PDF text extraction."""
 
 import logging
 import re
-from pathlib import Path
 
 import pymupdf4llm
 
@@ -42,7 +41,7 @@ def extract_text_hybrid(pdf_path):
     try:
         text = extract_text_pymupdf(pdf_path)
         word_count = len(text.split())
-        
+
         if word_count < 50:
             log.info("Low text count (%d words), trying OCR: %s", word_count, pdf_path.name)
             try:
@@ -51,7 +50,7 @@ def extract_text_hybrid(pdf_path):
                     return clean_text(ocr_text)
             except Exception as e:
                 log.warning("OCR failed: %s", e)
-        
+
         return clean_text(text)
     except Exception as e:
         log.warning("PyMuPDF failed (%s), trying OCR: %s", e, pdf_path.name)

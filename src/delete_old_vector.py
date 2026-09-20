@@ -7,9 +7,8 @@ Usage:
 
 import argparse
 import logging
-import sys
 
-from core.vector_store import delete_all, delete_by_source, get_index_stats
+from vector_store import delete_all, delete_by_source, get_index_stats
 
 log = logging.getLogger(__name__)
 

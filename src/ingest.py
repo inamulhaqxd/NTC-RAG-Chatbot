@@ -10,10 +10,10 @@ import logging
 import sys
 from pathlib import Path
 
-from core.ingestion import extract_text_hybrid
-from core.chunking import build_chunks
-from core.embedding import embed_documents
-from core.vector_store import upsert_vectors, delete_by_source
+from extract import extract_text_hybrid
+from chunking import build_chunks, build_metadata
+from embedding import embed_documents
+from vector_store import upsert_vectors, delete_by_source
 
 log = logging.getLogger(__name__)
 DOCUMENTS_DIR = Path(__file__).parent.parent / "data" / "documents"
@@ -38,32 +38,17 @@ def process_pdf(pdf_path, source_name=None):
     
     chunk_texts = [c['text'] for c in chunks]
     chunk_ids = [f"{pdf_path.stem}-{c['id']}" for c in chunks]
-    chunk_metadatas = [{
-        "text": c['text'],
-        "source": source,
-        "chunk_id": c['id'],
-        "section": c.get('heading', ''),
-        "page": c.get('page', 0),
-        "level": c.get('level', 'chunk'),
-        "parent_id": c.get('parent_id', '') or '',
-        "child_count": len(c.get('children', [])),
-    } for c in chunks]
-    
+    chunk_metadatas = [build_metadata(c, source) for c in chunks]
+
     batch_size = 50
     vectors = []
-    for i in range(0, len(chunk_texts), batch_size):
+    for i in range(0, len(chunks), batch_size):
         batch_texts = chunk_texts[i:i + batch_size]
         batch_ids = chunk_ids[i:i + batch_size]
-        batch_metadatas = chunk_metadatas[i:i + batch_size]
-        
-        vectors_raw = embed_documents(batch_texts)
-        
-        for vec, cid, meta in zip(vectors_raw, batch_ids, batch_metadatas):
-            vectors.append({
-                "id": cid,
-                "values": vec,
-                "metadata": meta,
-            })
+        batch_metas = chunk_metadatas[i:i + batch_size]
+        batch_vecs = embed_documents(batch_texts)
+        for vec, cid, meta in zip(batch_vecs, batch_ids, batch_metas):
+            vectors.append({"id": cid, "values": vec, "metadata": meta})
     
     upsert_vectors(vectors)
     log.info("Upserted %d chunks for %s", len(vectors), pdf_path.name)

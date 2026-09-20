@@ -12,8 +12,8 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 EMBEDDING_MODEL = "nomic-embed-text:latest"
 INDEX_NAME = "rag-index"
 LLM_MODEL = "openai/gpt-oss-20b"
-TOP_K = 25
-SCORE_THRESHOLD = 0.20
+TOP_K = 15
+SCORE_THRESHOLD = 0.30
 
 BASE_DIR = Path(__file__).parent.parent
 DOCUMENTS_DIR = BASE_DIR / "data" / "documents"
