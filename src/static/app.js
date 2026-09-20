@@ -1,4 +1,5 @@
 const messagesContainer = document.getElementById('messages');
+const chatContainer = document.getElementById('chatContainer');
 const questionInput = document.getElementById('questionInput');
 const sendBtn = document.getElementById('sendBtn');
 const welcomeMessage = document.getElementById('welcomeMessage');
@@ -31,15 +32,15 @@ async function sendMessage() {
   if (!question) return;
 
   isSending = true;
+  sendBtn.disabled = true;
+  questionInput.disabled = true;
   welcomeMessage.style.display = 'none';
   
   addMessage('user', question);
   questionInput.value = '';
   questionInput.style.height = 'auto';
-  questionInput.disabled = true;
   
   const typingId = addTypingIndicator();
-  sendBtn.disabled = true;
 
   try {
     const response = await fetch('/ask', {
