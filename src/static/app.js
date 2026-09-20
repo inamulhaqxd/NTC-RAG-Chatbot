@@ -5,6 +5,7 @@ const welcomeMessage = document.getElementById('welcomeMessage');
 const loadingOverlay = document.getElementById('loadingOverlay');
 
 let chatHistory = [];
+let isSending = false;
 
 function handleKeyDown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -25,14 +26,17 @@ function newChat() {
 }
 
 async function sendMessage() {
+  if (isSending) return;
   const question = questionInput.value.trim();
   if (!question) return;
 
+  isSending = true;
   welcomeMessage.style.display = 'none';
   
   addMessage('user', question);
   questionInput.value = '';
   questionInput.style.height = 'auto';
+  questionInput.disabled = true;
   
   const typingId = addTypingIndicator();
   sendBtn.disabled = true;
@@ -56,7 +60,9 @@ async function sendMessage() {
     addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
     showToast('Error: ' + error.message, 'error');
   } finally {
+    isSending = false;
     sendBtn.disabled = false;
+    questionInput.disabled = false;
     questionInput.focus();
   }
 }
@@ -128,6 +134,7 @@ async function uploadFile(input) {
   formData.append('file', file);
 
   loadingOverlay.classList.add('active');
+  input.disabled = true;
 
   try {
     const response = await fetch('/upload', {
@@ -145,6 +152,7 @@ async function uploadFile(input) {
     showToast('Upload failed: ' + error.message, 'error');
   } finally {
     loadingOverlay.classList.remove('active');
+    input.disabled = false;
     input.value = '';
   }
 }
